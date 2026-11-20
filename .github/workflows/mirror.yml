@@ -1,0 +1,42 @@
+# Mirror of the inok.info app export for the InokApp fallback (ruling A-144): every 6 hours (the owner's choice) + by hand.
+# 03:23 / 09:23 / 15:23 / 21:23 UTC - away from the site's 01:00 cron and the 02:00 Kyiv news run.
+name: mirror
+on:
+  schedule:
+    - cron: "23 3,9,15,21 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: fetch the export (byte-exact, sha256-checked)
+        run: python3 mirror.py
+      - name: commit a change
+        run: |
+          git config user.name "inok-mirror-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A export status.json
+          if git diff --cached --quiet; then echo "nothing to commit"; else git commit -q -m "mirror: $(cat .msg 2>/dev/null || echo status)"; git push -q; fi
+      - name: site tree
+        run: |
+          mkdir -p _site
+          cp -r export status.json index.html .nojekyll _site/ 2>/dev/null || true
+          ls -la _site _site/export
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
